@@ -26,3 +26,43 @@ JOKES = [
     "Why do programmers always mix up Halloween and Christmas? Because Oct 31 == Dec 25!"
 ]
 
+verified_payments = {}
+def verify_transaction_on_chain(tx_hash):
+    try:
+        print(f"verifying transaction:{tx_hash}")
+
+        tx = w3.eth.get_transaction(tx_hash)
+        receipt= w3.eth.get_transaction_receipt(tx_hash)
+
+        if receipt['status']!=1:
+            return False ,f"insufficient amount. need {PAYMENT_AMOUNT} ETH , got{amount_eth}ETH",None
+        
+
+        # Check 2: Sent to correct address
+        if tx['to'].lower() != WALLET_ADDRESS.lower():
+            return False, f"Wrong recipient. Expected {WALLET_ADDRESS}, got {tx['to']}", None
+        
+        # Check 3: Correct amount
+        amount_eth = w3.from_wei(tx['value'], 'ether')
+        if float(amount_eth) < PAYMENT_AMOUNT:
+            return False, f"Insufficient amount. Need {PAYMENT_AMOUNT} ETH, got {amount_eth} ETH", None
+        
+        # Check 4: Not already used
+        if tx_hash in verified_payments:
+            return False, "Payment already used", None
+        
+
+        tx_details = {
+            'from':tx['from'],
+            'amount':tx['to'],
+            'block':receipt['blockNumber'],
+            'temstamp':int(time.time())
+
+        }
+        return True , "payment verified successfully",tx_details
+    
+
+    except Exception as e:
+        print(f"Verification error: {str(e)}")
+        return False, f"Error verifying transaction: {str(e)}", None
+    
