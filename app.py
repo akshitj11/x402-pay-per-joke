@@ -65,4 +65,68 @@ def verify_transaction_on_chain(tx_hash):
     except Exception as e:
         print(f"Verification error: {str(e)}")
         return False, f"Error verifying transaction: {str(e)}", None
+
+
+@app.route('/')
+def home():
+    return jsonify({
+        'service': 'x402 pay-per-joke API',
+        'version':'1.0.0',
+        'price': f'{PAYMENT_AMOUNT}ETH per joke',
+        'payment_address':WALLET_ADDRESS,
+        'NETWORK':'BASE SEPOLIA TESTNET',
+        'blockchain_connected':w3.is_connected(),
+        'endpoints':{
+            'GET/JOKE':'get a joke',
+            'POST/verify':'verify your payment',
+            'GET /stats':'API statistics'
+        }
+
+    })
+@app.route('/joke',methods=['GET'])
+def get_joke():
+        payment_proof=request.headers.get('X-Payment-Proof')
+    if not payment_proof:
+        return jsonify({
+            "error": "Payment Required",
+            "code": 402,
+            "message": "You need to pay to access this joke",
+            "payment_details": {
+                "amount": f"{PAYMENT_AMOUNT} ETH",
+                "recipient": WALLET_ADDRESS,
+                "network": "Base Sepolia Testnet",
+                "chain_id": 84532
+            },
+            "instructions": [
+                "1. Send payment via MetaMask to the address above",
+                "2. Copy the transaction hash",
+                "3. POST to /verify with your transaction hash",
+                "4. Retry this request with X-Payment-Proof header"
+            ]
+        }), 402
+    
+    # Check if payment is verified
+    if payment_proof not in verified_payments:
+        return jsonify({
+            "error": "Payment Not Verified",
+            "code": 402,
+            "message": "Payment proof not recognized. Have you verified it?",
+            "instructions": "POST your transaction hash to /verify first"
+        }), 402
+    
+    # Payment verified - return joke
+    joke = random.choice(JOKES)
+    payment_info = verified_payments[payment_proof]
+    
+    return jsonify({
+        "joke": joke,
+        "payment": {
+            "verified": True,
+            "amount": payment_info['amount'],
+            "transaction": payment_proof,
+            "from": payment_info['from']
+        },
+        "timestamp": int(time.time())
+    })
+
     
