@@ -98,12 +98,12 @@ def get_joke():
                 "chain_id": 84532
             },
             "instructions": [
-                "1. Send payment via MetaMask to the address above",
+                "1. Send payment via phantom to the address above",
                 "2. Copy the transaction hash",
                 "3. POST to /verify with your transaction hash",
                 "4. Retry this request with X-Payment-Proof header"
             ]
-        }), 402
+        })
     
     # Check if payment is verified
     if payment_proof not in verified_payments:
@@ -117,7 +117,6 @@ def get_joke():
     # Payment verified - return joke
     joke = random.choice(JOKES)
     payment_info = verified_payments[payment_proof]
-    
     return jsonify({
         "joke": joke,
         "payment": {
@@ -129,4 +128,83 @@ def get_joke():
         "timestamp": int(time.time())
     })
 
+@app.route('/verify',method=['POST'])
+def verify_payment():
+     data=request.get_json()
+     if not data or'transactionhash' not in data:
+          return jsonify({
+               'error':'missing transaction hash',
+               'message':'please provide transactionhash in request body'
+
+          }),400
+
+tx_hash = data['transactionHash']
+
+if not tx_hash.startswith('0x') or len(tx_hash) !=66:
+     return jsonify({
+          'error':'invalid transaction hash format',
+          'message':'transaction hash should be 66 characters starting 0x'
+
+     }),400
+
+if tx_hash in verified_payments:
+     return jsonify({
+          'verified':True,
+          'message':'payment already verified',
+          'transaction':tx_hash
+          'note':'you can use this transaction hash in X-Payment-Proof'
+
+     })
+
+is_valid,message,tx_details = verofy_transaction_on_chain(tx_hash)
+
+if is_valid:
+     verified_payments[tx_hash] = tx_details
+     return jsonify({
+          'verfied':True,
+          'message':'payment verified successfully',
+          'details':{
+               'amount':f'{tx_details['amount']}ETH',
+               'block':tx_details['block'],
+               'from':tx_details['from']
+          }
+          'next_step':'now request /joke with x-payment-proof header set to this transaction hash'
+     })
+ else:
+     return jsonify({
+          'verified':False,
+          'message':message,
+          'transaction':tx_hash
+     }),400
+@app.route('/stats', methods=['GET'])
+def stats():
+    """API statistics"""
+    return jsonify({
+        "total_payments": len(verified_payments),
+        "price_per_joke": f"{PAYMENT_AMOUNT} ETH",
+        "total_revenue": f"{sum(p['amount'] for p in verified_payments.values())} ETH",
+        "blockchain_connected": w3.is_connected(),
+        "network": "Base Sepolia"
+    })
+
+
+if __name__ == '__main__':
+    print("=" * 60)
+    print("🚀 x402 Pay-Per-Joke API Starting...")
+    print("=" * 60)
+    print(f"💰 Payment Address: {WALLET_ADDRESS}")
+    print(f"💵 Price: {PAYMENT_AMOUNT} ETH per joke")
+    print(f"🌐 Network: Base Sepolia Testnet")
+    print(f"🔗 Blockchain Connected: {w3.is_connected()}")
+    print("=" * 60)
+    print("📝 Endpoints:")
+    print("   GET  /          - API info")
+    print("   GET  /joke      - Get joke (needs payment)")
+    print("   POST /verify    - Verify payment")
+    print("   GET  /stats     - Statistics")
+    print("=" * 60)
+    print("🎯 Running on http://localhost:5000")
+    print("=" * 60)
     
+    app.run(debug=True, port=5000)
+  
